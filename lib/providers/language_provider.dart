@@ -31,7 +31,7 @@ class LanguageProvider with ChangeNotifier {
               final chatId = user['id'];
               // Send to backend using ApiService
               await ApiService.post(
-                'telegram/bot-clients/update-language/', // <-- your backend endpoint, e.g., /set_language/
+                'telegram/bot-clients/set-language/', // <-- your backend endpoint, e.g., /set_language/
                 {
                   'chat_id': chatId,
                   'language': lang,
