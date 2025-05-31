@@ -1,0 +1,39 @@
+name: Deploy Flutter Web
+
+on:
+  push:
+    branches:
+      - main # or your default branch
+
+jobs:
+  build-and-deploy:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+
+      - name: Install dependencies
+        run: flutter pub get
+
+      - name: Build web
+        run: flutter build web --release
+
+      - name: Deploy to server via SSH
+        env:
+          SSH_PRIVATE_KEY: ${{ secrets.SSH_PRIVATE_KEY }}
+          SSH_USER: ${{ secrets.SSH_USER }}
+          SSH_HOST: ${{ secrets.SSH_HOST }}
+          TARGET_DIR: ${{ secrets.TARGET_DIR }}
+        run: |
+          mkdir -p ~/.ssh
+          echo "$SSH_PRIVATE_KEY" > ~/.ssh/id_ed25519
+          chmod 600 ~/.ssh/id_ed25519
+          echo -e "Host *\n\tStrictHostKeyChecking no\n" > ~/.ssh/config
+          scp -r -i ~/.ssh/id_ed25519 build/web/* $SSH_USER@$SSH_HOST:$TARGET_DIR
+          ssh -i ~/.ssh/id_ed25519 $SSH_USER@$SSH_HOST "chmod -R 777 $TARGET_DIR"
