@@ -10,6 +10,7 @@ import 'dart:html' as html;
 import 'package:flutter/foundation.dart'; // For kIsWeb
 import 'package:flutter_localizations/flutter_localizations.dart';
 
+import 'package:boyshub/functions/js_helper.dart';
 String? getInitialLangFromUrl() {
   final uri = Uri.parse(html.window.location.href);
   return uri.queryParameters['lang'];
@@ -51,6 +52,25 @@ class _MyAppState extends State<MyApp> {
         context.read<LanguageProvider>().setLang(lang);
       }
       _langSet = true;
+      // Show chat id if available
+      final chatId = getTelegramChatIdJs();
+      if (chatId != null) {
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          showDialog(
+            context: context,
+            builder: (_) => AlertDialog(
+              title: Text("Telegram chat_id"),
+              content: Text("Your Telegram chat_id is:\n$chatId"),
+              actions: [
+                TextButton(
+                  child: Text("OK"),
+                  onPressed: () => Navigator.of(context).pop(),
+                )
+              ],
+            ),
+          );
+        });
+      }
     }
   }
 
