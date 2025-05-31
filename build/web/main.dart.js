@@ -44168,7 +44168,7 @@ break
 case 6:n=B.h.k(o.a)
 l=t.N
 s=9
-return A.I(A.aZa(A.a([A.a85("bot-clients/set-language/",A.a1(["chat_id",n,"language",a],l,l)),A.nz(B.MO,new A.ah8(),t.I6)],t.fB),t.Wd),$async$zP)
+return A.I(A.aZa(A.a([A.a85("telegram/bot-clients/set-language/",A.a1(["chat_id",n,"language",a],l,l)),A.nz(B.MO,new A.ah8(),t.I6)],t.fB),t.Wd),$async$zP)
 case 9:A.ee("Language updated on server: "+a)
 s=7
 break
