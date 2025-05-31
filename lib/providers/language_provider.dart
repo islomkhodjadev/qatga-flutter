@@ -21,7 +21,7 @@ class LanguageProvider with ChangeNotifier {
 
     // Only on web, send Telegram chat_id to backend
     if (kIsWeb) {
-      final chatId = await getTelegramChatIdJs();
+      final chatId = await getTelegramChatId();
       if (chatId != null) {
         await ApiService.post(
           'bot-clients/set-language/',

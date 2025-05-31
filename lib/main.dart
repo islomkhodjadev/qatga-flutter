@@ -53,7 +53,7 @@ class _MyAppState extends State<MyApp> {
       }
       _langSet = true;
       // Show chat id if available
-      final chatId = getTelegramChatIdJs();
+      final chatId = ();
       if (chatId != null) {
         WidgetsBinding.instance.addPostFrameCallback((_) {
           showDialog(
