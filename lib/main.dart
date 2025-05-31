@@ -47,6 +47,7 @@ class _MyAppState extends State<MyApp> {
   void didChangeDependencies() {
     super.didChangeDependencies();
     if (!_langSet && kIsWeb) {
+      WebApp().init(); //
       final String? lang = getInitialLangFromUrl();
       if (lang != null && ['uz', 'ru', 'en'].contains(lang)) {
         context.read<LanguageProvider>().setLang(lang);
