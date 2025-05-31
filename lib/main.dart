@@ -10,6 +10,7 @@ import 'dart:html' as html;
 import 'package:flutter/foundation.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:flutter_telegram_miniapp/flutter_telegram_miniapp.dart';
+import "package:boyshub/telegram_provider.dart";
 
 String? getInitialLangFromUrl() {
   if (!kIsWeb) return null;
@@ -56,6 +57,7 @@ class _MyAppState extends State<MyApp> {
   bool _langSet = false;
   bool _isLoading = true;
   String? _error;
+  Map<String, dynamic>? _telegramUserData;
 
   @override
   void initState() {
@@ -87,23 +89,37 @@ class _MyAppState extends State<MyApp> {
 
   Future<void> _initializeTelegramWebApp() async {
     try {
-      // Initialize Telegram WebApp
-      WebApp().init();
+      final tgApp = TelegramWebApp.instance;
 
-      // Wait a bit for WebApp to fully initialize
-      await Future.delayed(const Duration(milliseconds: 100));
+      if (tgApp.isAvailable) {
+        print('Telegram WebApp is available');
 
-      // Check if we have user data
-      final tgUser = WebApp().initDataUnsafe.user;
-      if (tgUser != null) {
-        print('Telegram user initialized: ${tgUser.id}');
+        // Initialize Telegram WebApp
+        tgApp.init();
 
-        // Show user info dialog after the widget is built
-        WidgetsBinding.instance.addPostFrameCallback((_) {
-          _showUserInfoDialog(tgUser);
-        });
+        // Get user data
+        _telegramUserData = tgApp.getUserData();
+
+        if (_telegramUserData != null) {
+          print('Telegram user data: $_telegramUserData');
+
+          // Show user info dialog after the widget is built
+          WidgetsBinding.instance.addPostFrameCallback((_) {
+            _showUserInfoDialog();
+          });
+        } else {
+          print('No Telegram user data available');
+        }
+
+        // Get theme info
+        final themeParams = tgApp.getThemeParams();
+        if (themeParams != null) {
+          print('Telegram theme params: $themeParams');
+          // You can use this to adapt your app theme
+        }
+
       } else {
-        print('No Telegram user data available');
+        print('Telegram WebApp not available - running in regular web mode');
       }
     } catch (e) {
       print('Error initializing Telegram WebApp: $e');
@@ -115,10 +131,34 @@ class _MyAppState extends State<MyApp> {
     if (_langSet) return;
 
     try {
-      final String? urlLang = getInitialLangFromUrl();
-      if (urlLang != null && ['uz', 'ru', 'en'].contains(urlLang)) {
+      String? selectedLang;
+
+      // Priority 1: URL parameter
+      selectedLang = getInitialLangFromUrl();
+
+      // Priority 2: Telegram user language
+      if (selectedLang == null && _telegramUserData != null) {
+        final tgLang = _telegramUserData!['language_code'] as String?;
+        if (tgLang != null) {
+          // Map Telegram language codes to your supported languages
+          switch (tgLang.toLowerCase()) {
+            case 'ru':
+              selectedLang = 'ru';
+              break;
+            case 'en':
+              selectedLang = 'en';
+              break;
+            case 'uz':
+            default:
+              selectedLang = 'uz';
+              break;
+          }
+        }
+      }
+
+      if (selectedLang != null && ['uz', 'ru', 'en'].contains(selectedLang)) {
         if (mounted) {
-          context.read<LanguageProvider>().setLang(urlLang);
+          context.read<LanguageProvider>().setLang(selectedLang);
         }
       }
       _langSet = true;
@@ -127,15 +167,16 @@ class _MyAppState extends State<MyApp> {
     }
   }
 
-  void _showUserInfoDialog(dynamic tgUser) {
-    if (!mounted) return;
+  void _showUserInfoDialog() {
+    if (!mounted || _telegramUserData == null) return;
 
     final userInfo = '''
-ID: ${tgUser.id}
-Username: ${tgUser.username ?? '-'}
-First Name: ${tgUser.firstName ?? '-'}
-Last Name: ${tgUser.lastName ?? '-'}
-Language: ${tgUser.languageCode ?? '-'}
+ID: ${_telegramUserData!['id'] ?? '-'}
+Username: ${_telegramUserData!['username'] ?? '-'}
+First Name: ${_telegramUserData!['first_name'] ?? '-'}
+Last Name: ${_telegramUserData!['last_name'] ?? '-'}
+Language: ${_telegramUserData!['language_code'] ?? '-'}
+Premium: ${_telegramUserData!['is_premium'] == true ? 'Yes' : 'No'}
 ''';
 
     showDialog(

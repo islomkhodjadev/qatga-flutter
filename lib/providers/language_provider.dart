@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:flutter/foundation.dart';
 import 'package:boyshub/services/api_service.dart';
-import 'package:flutter_telegram_miniapp/flutter_telegram_miniapp.dart';
+import 'package:boyshub/telegram_provider.dart'; // Adjust path as needed
 
 class LanguageProvider with ChangeNotifier {
   String _lang = 'uz';
@@ -39,28 +39,34 @@ class LanguageProvider with ChangeNotifier {
       print("Error setting language: $e");
       _isLoading = false;
       notifyListeners();
-      // Optionally rethrow if you want to handle errors in UI
-      // rethrow;
     }
   }
 
   Future<void> _updateLanguageOnServer(String lang) async {
     try {
-      final user = WebApp().initDataUnsafe.user;
-      if (user?.id != null) {
-        final chatId = user!.id.toString();
+      final tgApp = TelegramWebApp.instance;
 
-        await Future.any([
-          ApiService.post(
-            'bot-clients/set-language/',
-            {'chat_id': chatId, 'language': lang},
-          ),
-          Future.delayed(const Duration(seconds: 10), () => throw TimeoutException('Request timed out')),
-        ]);
+      if (tgApp.isAvailable) {
+        final userId = tgApp.userId;
 
-        print("Language updated on server: $lang");
+        if (userId != null) {
+          final chatId = userId.toString();
+
+          // Set a timeout for the API call
+          await Future.any([
+            ApiService.post(
+              'telegram/bot-clients/set-language/',
+              {'chat_id': chatId, 'language': lang},
+            ),
+            Future.delayed(const Duration(seconds: 10), () => throw TimeoutException('Request timed out')),
+          ]);
+
+          print("Language updated on server: $lang for user: $chatId");
+        } else {
+          print("Telegram user ID not available - skipping server update");
+        }
       } else {
-        print("Telegram user ID not available - skipping server update");
+        print("Telegram WebApp not available - skipping server update");
       }
     } catch (e) {
       print("Failed to update language on server: $e");
@@ -92,38 +98,61 @@ class LanguageProvider with ChangeNotifier {
 
   Future<void> _loadLanguageFromTelegram() async {
     try {
-      final user = WebApp().initDataUnsafe.user;
-      final telegramLang = user?.languageCode;
+      final tgApp = TelegramWebApp.instance;
 
-      if (telegramLang != null) {
-        // Map Telegram language codes to supported languages
-        String mappedLang;
-        switch (telegramLang.toLowerCase()) {
-          case 'ru':
-            mappedLang = 'ru';
-            break;
-          case 'en':
-            mappedLang = 'en';
-            break;
-          case 'uz':
-          default:
-            mappedLang = 'uz';
-            break;
-        }
+      if (tgApp.isAvailable) {
+        final userData = tgApp.getUserData();
+        final telegramLang = userData?['language_code'] as String?;
 
-        if (['uz', 'ru', 'en'].contains(mappedLang)) {
-          _lang = mappedLang;
+        if (telegramLang != null) {
+          // Map Telegram language codes to supported languages
+          String mappedLang;
+          switch (telegramLang.toLowerCase()) {
+            case 'ru':
+              mappedLang = 'ru';
+              break;
+            case 'en':
+              mappedLang = 'en';
+              break;
+            case 'uz':
+            default:
+              mappedLang = 'uz';
+              break;
+          }
 
-          // Save the detected language
-          final prefs = await SharedPreferences.getInstance();
-          await prefs.setString('app_language', mappedLang);
+          if (['uz', 'ru', 'en'].contains(mappedLang)) {
+            _lang = mappedLang;
 
-          print("Language detected from Telegram: $mappedLang");
+            // Save the detected language
+            final prefs = await SharedPreferences.getInstance();
+            await prefs.setString('app_language', mappedLang);
+
+            print("Language detected from Telegram: $mappedLang");
+          }
         }
       }
     } catch (e) {
       print("Error getting language from Telegram: $e");
     }
+  }
+
+  // Helper method to get current user's Telegram data
+  Map<String, dynamic>? getTelegramUserData() {
+    if (!kIsWeb) return null;
+
+    try {
+      final tgApp = TelegramWebApp.instance;
+      return tgApp.isAvailable ? tgApp.getUserData() : null;
+    } catch (e) {
+      print("Error getting Telegram user data: $e");
+      return null;
+    }
+  }
+
+  // Check if running in Telegram
+  bool get isRunningInTelegram {
+    if (!kIsWeb) return false;
+    return TelegramWebApp.instance.isAvailable;
   }
 }
 

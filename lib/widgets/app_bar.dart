@@ -24,7 +24,7 @@ class MyAppBar extends StatelessWidget implements PreferredSizeWidget {
         PopupMenuButton<String>(
           icon: const Icon(Icons.language),
           onSelected: (lang) {
-            langProvider.setLang(lang);
+            context.read<LanguageProvider>().setLang(lang);
           },
           itemBuilder: (context) => [
             const PopupMenuItem(value: 'uz', child: Text('Uzbekcha')),
