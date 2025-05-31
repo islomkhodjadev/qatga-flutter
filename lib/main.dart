@@ -7,19 +7,31 @@ import 'package:boyshub/providers/language_provider.dart';
 import 'package:boyshub/screens/intro_screen.dart';
 import 'package:boyshub/providers/theme_provider.dart';
 import 'dart:html' as html;
-import 'package:flutter/foundation.dart'; // For kIsWeb
+import 'package:flutter/foundation.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:flutter_telegram_miniapp/flutter_telegram_miniapp.dart';
 
 String? getInitialLangFromUrl() {
-  final uri = Uri.parse(html.window.location.href);
-  return uri.queryParameters['lang'];
+  if (!kIsWeb) return null;
+  try {
+    final uri = Uri.parse(html.window.location.href);
+    return uri.queryParameters['lang'];
+  } catch (e) {
+    print('Error parsing URL for language: $e');
+    return null;
+  }
 }
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
-  await dotenv.load(fileName: ".env");
-  print('API_BASE_URL: ${dotenv.env['API_BASE_URL']}');
+
+  try {
+    await dotenv.load(fileName: ".env");
+    print('API_BASE_URL: ${dotenv.env['API_BASE_URL']}');
+  } catch (e) {
+    print('Error loading .env file: $e');
+  }
+
   runApp(
     MultiProvider(
       providers: [
@@ -42,21 +54,83 @@ class MyApp extends StatefulWidget {
 
 class _MyAppState extends State<MyApp> {
   bool _langSet = false;
+  bool _isLoading = true;
+  String? _error;
 
   @override
-  void didChangeDependencies() {
-    super.didChangeDependencies();
-    if (!_langSet && kIsWeb) {
-      WebApp().init(); //
-      final String? lang = getInitialLangFromUrl();
-      if (lang != null && ['uz', 'ru', 'en'].contains(lang)) {
-        context.read<LanguageProvider>().setLang(lang);
-      }
-      _langSet = true;
+  void initState() {
+    super.initState();
+    _initializeApp();
+  }
 
+  Future<void> _initializeApp() async {
+    try {
+      if (kIsWeb) {
+        // Initialize Telegram WebApp first
+        await _initializeTelegramWebApp();
+
+        // Set up language
+        await _setupLanguage();
+      }
+
+      setState(() {
+        _isLoading = false;
+      });
+    } catch (e) {
+      print('Error initializing app: $e');
+      setState(() {
+        _error = e.toString();
+        _isLoading = false;
+      });
+    }
+  }
+
+  Future<void> _initializeTelegramWebApp() async {
+    try {
+      // Initialize Telegram WebApp
+      WebApp().init();
+
+      // Wait a bit for WebApp to fully initialize
+      await Future.delayed(const Duration(milliseconds: 100));
+
+      // Check if we have user data
       final tgUser = WebApp().initDataUnsafe.user;
       if (tgUser != null) {
-        final userInfo = '''
+        print('Telegram user initialized: ${tgUser.id}');
+
+        // Show user info dialog after the widget is built
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          _showUserInfoDialog(tgUser);
+        });
+      } else {
+        print('No Telegram user data available');
+      }
+    } catch (e) {
+      print('Error initializing Telegram WebApp: $e');
+      // Don't throw here, continue without Telegram features
+    }
+  }
+
+  Future<void> _setupLanguage() async {
+    if (_langSet) return;
+
+    try {
+      final String? urlLang = getInitialLangFromUrl();
+      if (urlLang != null && ['uz', 'ru', 'en'].contains(urlLang)) {
+        if (mounted) {
+          context.read<LanguageProvider>().setLang(urlLang);
+        }
+      }
+      _langSet = true;
+    } catch (e) {
+      print('Error setting up language: $e');
+    }
+  }
+
+  void _showUserInfoDialog(dynamic tgUser) {
+    if (!mounted) return;
+
+    final userInfo = '''
 ID: ${tgUser.id}
 Username: ${tgUser.username ?? '-'}
 First Name: ${tgUser.firstName ?? '-'}
@@ -64,29 +138,104 @@ Last Name: ${tgUser.lastName ?? '-'}
 Language: ${tgUser.languageCode ?? '-'}
 ''';
 
-        WidgetsBinding.instance.addPostFrameCallback((_) {
-          showDialog(
-            context: context,
-            builder: (_) => AlertDialog(
-              title: const Text("Telegram User Data"),
-              content: SelectableText(userInfo),
-              actions: [
-                TextButton(
-                  child: const Text("OK"),
-                  onPressed: () => Navigator.of(context).pop(),
-                )
-              ],
-            ),
-          );
-        });
-      }
-
-    }
+    showDialog(
+      context: context,
+      builder: (_) => AlertDialog(
+        title: const Text("Telegram User Data"),
+        content: SelectableText(userInfo),
+        actions: [
+          TextButton(
+            child: const Text("OK"),
+            onPressed: () => Navigator.of(context).pop(),
+          )
+        ],
+      ),
+    );
   }
-
 
   @override
   Widget build(BuildContext context) {
+    // Show loading screen while initializing
+    if (_isLoading) {
+      return MaterialApp(
+        home: Scaffold(
+          backgroundColor: const Color(0xFFF8FAFC),
+          body: const Center(
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                CircularProgressIndicator(
+                  color: Color(0xFF1C77FF),
+                ),
+                SizedBox(height: 20),
+                Text(
+                  'Loading...',
+                  style: TextStyle(
+                    color: Color(0xFF1C77FF),
+                    fontSize: 16,
+                    fontWeight: FontWeight.w500,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      );
+    }
+
+    // Show error screen if initialization failed
+    if (_error != null) {
+      return MaterialApp(
+        home: Scaffold(
+          backgroundColor: const Color(0xFFF8FAFC),
+          body: Center(
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                const Icon(
+                  Icons.error_outline,
+                  color: Colors.redAccent,
+                  size: 64,
+                ),
+                const SizedBox(height: 20),
+                Text(
+                  'Failed to initialize app',
+                  style: const TextStyle(
+                    color: Colors.redAccent,
+                    fontSize: 18,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+                const SizedBox(height: 10),
+                Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 20),
+                  child: Text(
+                    _error!,
+                    textAlign: TextAlign.center,
+                    style: const TextStyle(
+                      color: Colors.black54,
+                      fontSize: 14,
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 20),
+                ElevatedButton(
+                  onPressed: () {
+                    setState(() {
+                      _error = null;
+                      _isLoading = true;
+                    });
+                    _initializeApp();
+                  },
+                  child: const Text('Retry'),
+                ),
+              ],
+            ),
+          ),
+        ),
+      );
+    }
+
     return Consumer2<ThemeProvider, LanguageProvider>(
       builder: (context, themeProvider, langProvider, _) {
         return MaterialApp(
@@ -105,7 +254,7 @@ Language: ${tgUser.languageCode ?? '-'}
           theme: ThemeData(
             brightness: Brightness.light,
             scaffoldBackgroundColor: const Color(0xFFF8FAFC),
-            colorScheme: ColorScheme.light(
+            colorScheme: const ColorScheme.light(
               primary: Color(0xFF1C77FF),
               secondary: Color(0xFF20DF7F),
               background: Color(0xFFF8FAFC),
@@ -117,7 +266,7 @@ Language: ${tgUser.languageCode ?? '-'}
               error: Colors.redAccent,
               onError: Colors.white,
             ),
-            appBarTheme: AppBarTheme(
+            appBarTheme: const AppBarTheme(
               backgroundColor: Color(0xFFF8FAFC),
               elevation: 2,
               iconTheme: IconThemeData(color: Color(0xFF1C77FF)),
@@ -128,13 +277,13 @@ Language: ${tgUser.languageCode ?? '-'}
                 letterSpacing: 1,
               ),
             ),
-            cardTheme: CardTheme(
+            cardTheme: const CardTheme(
               color: Color(0xFFFFFFFF),
               elevation: 4,
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.all(Radius.circular(16))),
               margin: EdgeInsets.symmetric(vertical: 8, horizontal: 12),
             ),
-            textTheme: TextTheme(
+            textTheme: const TextTheme(
               bodyLarge: TextStyle(color: Colors.black, fontWeight: FontWeight.w500),
               bodyMedium: TextStyle(color: Colors.black54),
               headlineSmall: TextStyle(
@@ -149,9 +298,9 @@ Language: ${tgUser.languageCode ?? '-'}
             ),
             elevatedButtonTheme: ElevatedButtonThemeData(
               style: ElevatedButton.styleFrom(
-                backgroundColor: Color(0xFF1C77FF),
+                backgroundColor: const Color(0xFF1C77FF),
                 foregroundColor: Colors.white,
-                textStyle: TextStyle(
+                textStyle: const TextStyle(
                   fontWeight: FontWeight.bold,
                   fontSize: 16,
                   letterSpacing: 1.2,
@@ -163,41 +312,41 @@ Language: ${tgUser.languageCode ?? '-'}
             ),
             outlinedButtonTheme: OutlinedButtonThemeData(
               style: OutlinedButton.styleFrom(
-                foregroundColor: Color(0xFF1C77FF),
-                side: BorderSide(color: Color(0xFF1C77FF)),
+                foregroundColor: const Color(0xFF1C77FF),
+                side: const BorderSide(color: Color(0xFF1C77FF)),
                 shape: RoundedRectangleBorder(
                   borderRadius: BorderRadius.circular(12),
                 ),
               ),
             ),
-            floatingActionButtonTheme: FloatingActionButtonThemeData(
+            floatingActionButtonTheme: const FloatingActionButtonThemeData(
               backgroundColor: Color(0xFF20DF7F),
               foregroundColor: Colors.white,
               elevation: 4,
             ),
             inputDecorationTheme: InputDecorationTheme(
               filled: true,
-              fillColor: Color(0xFFF0F4F8),
+              fillColor: const Color(0xFFF0F4F8),
               enabledBorder: OutlineInputBorder(
-                borderSide: BorderSide(color: Color(0xFFE0E6ED)),
+                borderSide: const BorderSide(color: Color(0xFFE0E6ED)),
                 borderRadius: BorderRadius.circular(12),
               ),
               focusedBorder: OutlineInputBorder(
-                borderSide: BorderSide(color: Color(0xFF1C77FF), width: 2),
+                borderSide: const BorderSide(color: Color(0xFF1C77FF), width: 2),
                 borderRadius: BorderRadius.circular(12),
               ),
-              hintStyle: TextStyle(
+              hintStyle: const TextStyle(
                 color: Colors.black38,
               ),
-              labelStyle: TextStyle(
+              labelStyle: const TextStyle(
                 color: Color(0xFF1C77FF),
               ),
             ),
-            iconTheme: IconThemeData(
+            iconTheme: const IconThemeData(
               color: Color(0xFF1C77FF),
               size: 26,
             ),
-            dividerTheme: DividerThemeData(
+            dividerTheme: const DividerThemeData(
               color: Colors.black12,
               thickness: 1,
             ),
@@ -205,7 +354,7 @@ Language: ${tgUser.languageCode ?? '-'}
           darkTheme: ThemeData(
             brightness: Brightness.dark,
             scaffoldBackgroundColor: const Color(0xFF10141A),
-            colorScheme: ColorScheme.dark(
+            colorScheme: const ColorScheme.dark(
               primary: Color(0xFF1C77FF),
               secondary: Color(0xFF20DF7F),
               background: Color(0xFF10141A),
@@ -217,7 +366,7 @@ Language: ${tgUser.languageCode ?? '-'}
               error: Colors.redAccent,
               onError: Colors.white,
             ),
-            appBarTheme: AppBarTheme(
+            appBarTheme: const AppBarTheme(
               backgroundColor: Color(0xFF10141A),
               elevation: 2,
               iconTheme: IconThemeData(color: Color(0xFF1C77FF)),
@@ -228,13 +377,13 @@ Language: ${tgUser.languageCode ?? '-'}
                 letterSpacing: 1,
               ),
             ),
-            cardTheme: CardTheme(
+            cardTheme: const CardTheme(
               color: Color(0xFF22262F),
               elevation: 4,
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.all(Radius.circular(16))),
               margin: EdgeInsets.symmetric(vertical: 8, horizontal: 12),
             ),
-            textTheme: TextTheme(
+            textTheme: const TextTheme(
               bodyLarge: TextStyle(color: Colors.white, fontWeight: FontWeight.w500),
               bodyMedium: TextStyle(color: Colors.white70),
               headlineSmall: TextStyle(
@@ -249,9 +398,9 @@ Language: ${tgUser.languageCode ?? '-'}
             ),
             elevatedButtonTheme: ElevatedButtonThemeData(
               style: ElevatedButton.styleFrom(
-                backgroundColor: Color(0xFF1C77FF),
+                backgroundColor: const Color(0xFF1C77FF),
                 foregroundColor: Colors.white,
-                textStyle: TextStyle(
+                textStyle: const TextStyle(
                   fontWeight: FontWeight.bold,
                   fontSize: 16,
                   letterSpacing: 1.2,
@@ -263,46 +412,46 @@ Language: ${tgUser.languageCode ?? '-'}
             ),
             outlinedButtonTheme: OutlinedButtonThemeData(
               style: OutlinedButton.styleFrom(
-                foregroundColor: Color(0xFF1C77FF),
-                side: BorderSide(color: Color(0xFF1C77FF)),
+                foregroundColor: const Color(0xFF1C77FF),
+                side: const BorderSide(color: Color(0xFF1C77FF)),
                 shape: RoundedRectangleBorder(
                   borderRadius: BorderRadius.circular(12),
                 ),
               ),
             ),
-            floatingActionButtonTheme: FloatingActionButtonThemeData(
+            floatingActionButtonTheme: const FloatingActionButtonThemeData(
               backgroundColor: Color(0xFF20DF7F),
               foregroundColor: Colors.black,
               elevation: 4,
             ),
             inputDecorationTheme: InputDecorationTheme(
               filled: true,
-              fillColor: Color(0xFF181B20),
+              fillColor: const Color(0xFF181B20),
               enabledBorder: OutlineInputBorder(
-                borderSide: BorderSide(color: Color(0xFF22262F)),
+                borderSide: const BorderSide(color: Color(0xFF22262F)),
                 borderRadius: BorderRadius.circular(12),
               ),
               focusedBorder: OutlineInputBorder(
-                borderSide: BorderSide(color: Color(0xFF1C77FF), width: 2),
+                borderSide: const BorderSide(color: Color(0xFF1C77FF), width: 2),
                 borderRadius: BorderRadius.circular(12),
               ),
-              hintStyle: TextStyle(
+              hintStyle: const TextStyle(
                 color: Colors.white54,
               ),
-              labelStyle: TextStyle(
+              labelStyle: const TextStyle(
                 color: Color(0xFF1C77FF),
               ),
             ),
-            iconTheme: IconThemeData(
+            iconTheme: const IconThemeData(
               color: Color(0xFF1C77FF),
               size: 26,
             ),
-            dividerTheme: DividerThemeData(
+            dividerTheme: const DividerThemeData(
               color: Colors.white12,
               thickness: 1,
             ),
           ),
-          themeMode: themeProvider.themeMode,  // <<--- Dynamic
+          themeMode: themeProvider.themeMode,
           home: const IntroScreen(),
         );
       },
