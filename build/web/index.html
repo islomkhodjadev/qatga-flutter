@@ -45,22 +45,21 @@
   <link rel="manifest" href="manifest.json">
 </head>
 <body>
-<script src="https://telegram.org/js/telegram-web-app.js?57"></script>
+<script src="https://telegram.org/js/telegram-web-app.js"></script>
 <script>
-  window.addEventListener('DOMContentLoaded', function () {
-    try {
-      const tg = window.Telegram.WebApp;
-      const chatId = tg?.initDataUnsafe?.user?.id;
-      if (chatId) {
-        alert("Telegram chat_id: " + chatId);
-      } else {
-        console.warn("Telegram user ID not found.");
-      }
-    } catch (e) {
-      console.error("Error reading Telegram WebApp data:", e);
+  window.flutter_ready = false;
+  window.addEventListener('DOMContentLoaded', () => {
+    // Wait for Telegram SDK to be ready
+    if (window.Telegram && window.Telegram.WebApp) {
+      window.telegramWebAppReady = true;
+    } else {
+      console.warn("Telegram WebApp not available at DOMContentLoaded");
     }
+    window.flutter_ready = true;
   });
 </script>
+<script src="flutter_bootstrap.js" async></script>
+
 <script src="flutter_bootstrap.js" async></script>
 </body>
 </html>
