@@ -6,16 +6,57 @@ import 'package:provider/provider.dart';
 import 'package:boyshub/providers/language_provider.dart';
 import 'package:boyshub/screens/intro_screen.dart';
 import 'package:boyshub/providers/theme_provider.dart';
+import 'dart:html' as html;
+import 'package:flutter/foundation.dart'; // For kIsWeb
+import 'package:flutter_localizations/flutter_localizations.dart';
 
-Future<void> main() async {
+String? getInitialLangFromUrl() {
+  final uri = Uri.parse(html.window.location.href);
+  return uri.queryParameters['lang'];
+}
+void main() async {
   WidgetsFlutterBinding.ensureInitialized();
   await dotenv.load(fileName: ".env");
   print('API_BASE_URL: ${dotenv.env['API_BASE_URL']}');
-  runApp(const MyApp());
+  runApp(
+    MultiProvider(
+      providers: [
+        ChangeNotifierProvider(create: (_) => AuthProvider()),
+        ChangeNotifierProvider(create: (_) => PlaceProvider()),
+        ChangeNotifierProvider(create: (_) => LanguageProvider()),
+        ChangeNotifierProvider(create: (_) => ThemeProvider()),
+      ],
+      child: const MyApp(),
+    ),
+  );
 }
 
-class MyApp extends StatelessWidget {
+
+// <<<<< STATEFUL WIDGET
+class MyApp extends StatefulWidget {
   const MyApp({super.key});
+
+  @override
+  State<MyApp> createState() => _MyAppState();
+}
+
+class _MyAppState extends State<MyApp> {
+  bool _langSet = false;
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+
+    // Only do this once
+    if (!_langSet && kIsWeb) {
+      final String? lang = getInitialLangFromUrl();
+      if (lang != null && ['uz', 'ru', 'en'].contains(lang)) {
+        // Set the language using the provider
+        context.read<LanguageProvider>().setLang(lang);
+      }
+      _langSet = true;
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -26,11 +67,16 @@ class MyApp extends StatelessWidget {
         ChangeNotifierProvider(create: (_) => LanguageProvider()),
         ChangeNotifierProvider(create: (_) => ThemeProvider()),
       ],
-      // <<<<<<<< CHANGE THIS PART >>>>>>>>
-      child: Consumer<ThemeProvider>(
-        builder: (context, themeProvider, _) {
+      child: Consumer2<ThemeProvider, LanguageProvider>(
+        builder: (context, themeProvider, langProvider, _) {
           return MaterialApp(
             title: 'Qayerga boramiz?',
+            locale: Locale(langProvider.lang),
+            supportedLocales: const [
+              Locale('uz'),
+              Locale('ru'),
+              Locale('en'),
+            ],
             theme: ThemeData(
               brightness: Brightness.light,
               scaffoldBackgroundColor: const Color(0xFFF8FAFC),
