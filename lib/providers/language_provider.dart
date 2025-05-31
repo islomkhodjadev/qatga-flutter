@@ -3,7 +3,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'package:flutter/foundation.dart';
 import 'package:boyshub/services/api_service.dart';
 
-import 'package:boyshub/functions/js_helper.dart'; // Import your ApiService
+import 'package:flutter_telegram_miniapp/flutter_telegram_miniapp.dart';
 
 class LanguageProvider with ChangeNotifier {
   String _lang = 'uz';
@@ -13,23 +13,31 @@ class LanguageProvider with ChangeNotifier {
   LanguageProvider() {
     _loadLang();
   }
+
   void setLang(String lang) async {
     _lang = lang;
     notifyListeners();
+
     final prefs = await SharedPreferences.getInstance();
     await prefs.setString('app_language', lang);
 
-    // Only on web, send Telegram chat_id to backend
     if (kIsWeb) {
-      final chatId = await getTelegramChatId();
-      if (chatId != null) {
-        await ApiService.post(
-          'bot-clients/set-language/',
-          {'chat_id': chatId, 'language': lang},
-        );
+      try {
+        final user = WebApp().initDataUnsafe.user;
+        if (user != null && user.id != null) {
+          final chatId = user.id.toString();
+          await ApiService.post(
+            'bot-clients/set-language/',
+            {'chat_id': chatId, 'language': lang},
+          );
+        }
+      } catch (e) {
+        print("Telegram user ID not available: $e");
       }
     }
   }
+
+
 
 
   Future<void> _loadLang() async {

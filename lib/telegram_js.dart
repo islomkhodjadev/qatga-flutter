@@ -1,47 +1,20 @@
-@JS('Telegram.WebApp')
-library telegram_web_app;
+import 'dart:js' as js;
 
-import 'package:js/js.dart';
-@JS()
-@anonymous
-class ThemeParamsJs {
-  external String? get bg_color;
-  external String? get text_color;
-  external String? get hint_color;
-  external String? get link_color;
-  external String? get button_color;
-  external String? get button_text_color;
-  external factory ThemeParamsJs({
-    String? bg_color,
-    String? text_color,
-    String? hint_color,
-    String? link_color,
-    String? button_color,
-    String? button_text_color,
-  });
-}
+class TelegramWebApp {
+  static dynamic get webApp => js.context['Telegram']['WebApp'];
 
-@JS()
-external WebAppJs get webApp;
+  static dynamic get initDataUnsafe => webApp['initDataUnsafe'];
+  static dynamic get themeParams => webApp['themeParams'];
 
-@JS()
-@anonymous
-class WebAppJs {
-  external WebAppInitDataJs get initDataUnsafe;
-  external ThemeParamsJs get themeParams;
-}
+  static dynamic get user => initDataUnsafe['user'];
 
-@JS()
-@anonymous
-class WebAppInitDataJs {
-  external WebAppUserJs get user;
-}
+  // Helper methods to access common properties
+  static int get userId => user['id'] as int;
+  static String get username => user['username'] as String;
+  static String get firstName => user['first_name'] as String;
+  static String get lastName => user['last_name'] as String;
 
-@JS()
-@anonymous
-class WebAppUserJs {
-  external int get id;
-  external String get username;
-  external String get first_name;
-  external String get last_name;
+  static String get bgColor => themeParams['bg_color'] as String;
+  static String get textColor => themeParams['text_color'] as String;
+  static String get buttonColor => themeParams['button_color'] as String;
 }

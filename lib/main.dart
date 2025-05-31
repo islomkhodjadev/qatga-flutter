@@ -9,8 +9,8 @@ import 'package:boyshub/providers/theme_provider.dart';
 import 'dart:html' as html;
 import 'package:flutter/foundation.dart'; // For kIsWeb
 import 'package:flutter_localizations/flutter_localizations.dart';
+import 'package:flutter_telegram_miniapp/flutter_telegram_miniapp.dart';
 
-import 'package:boyshub/functions/js_helper.dart';
 String? getInitialLangFromUrl() {
   final uri = Uri.parse(html.window.location.href);
   return uri.queryParameters['lang'];
@@ -53,17 +53,22 @@ class _MyAppState extends State<MyApp> {
       }
       _langSet = true;
 
-      // Show ALL Telegram data if available
-      final allData = getTelegramAllData();
-      if (allData != null) {
+      final tgUser = WebApp().initDataUnsafe.user;
+      if (tgUser != null) {
+        final userInfo = '''
+ID: ${tgUser.id}
+Username: ${tgUser.username ?? '-'}
+First Name: ${tgUser.firstName ?? '-'}
+Last Name: ${tgUser.lastName ?? '-'}
+Language: ${tgUser.languageCode ?? '-'}
+''';
+
         WidgetsBinding.instance.addPostFrameCallback((_) {
           showDialog(
             context: context,
             builder: (_) => AlertDialog(
-              title: const Text("Telegram WebApp Data"),
-              content: SingleChildScrollView(
-                child: SelectableText(allData),
-              ),
+              title: const Text("Telegram User Data"),
+              content: SelectableText(userInfo),
               actions: [
                 TextButton(
                   child: const Text("OK"),
@@ -74,6 +79,7 @@ class _MyAppState extends State<MyApp> {
           );
         });
       }
+
     }
   }
 
