@@ -52,18 +52,21 @@ class _MyAppState extends State<MyApp> {
         context.read<LanguageProvider>().setLang(lang);
       }
       _langSet = true;
-      // Show chat id if available
-      final chatId = ();
-      if (chatId != null) {
+
+      // Show ALL Telegram data if available
+      final allData = getTelegramAllData();
+      if (allData != null) {
         WidgetsBinding.instance.addPostFrameCallback((_) {
           showDialog(
             context: context,
             builder: (_) => AlertDialog(
-              title: Text("Telegram chat_id"),
-              content: Text("Your Telegram chat_id is:\n$chatId"),
+              title: const Text("Telegram WebApp Data"),
+              content: SingleChildScrollView(
+                child: SelectableText(allData),
+              ),
               actions: [
                 TextButton(
-                  child: Text("OK"),
+                  child: const Text("OK"),
                   onPressed: () => Navigator.of(context).pop(),
                 )
               ],
@@ -73,6 +76,7 @@ class _MyAppState extends State<MyApp> {
       }
     }
   }
+
 
   @override
   Widget build(BuildContext context) {
