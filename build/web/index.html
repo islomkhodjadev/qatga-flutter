@@ -46,14 +46,16 @@
   <link rel="manifest" href="manifest.json">
   <style>
     html, body {
-      margin: 0;
-      padding: 0;
-      height: 100%;
-      overflow: hidden; /* prevent page scroll */
-      position: fixed;  /* prevent iOS "bounce" */
-      overscroll-behavior: none;
-      -webkit-overflow-scrolling: auto;
-    }
+  overflow: hidden !important;
+  position: fixed !important;
+  height: 100% !important;
+  width: 100% !important;
+  margin: 0 !important;
+  padding: 0 !important;
+  overscroll-behavior: none !important;
+  -webkit-overflow-scrolling: auto !important;
+}
+
 
     #flutter_container {
       width: 100vw;
