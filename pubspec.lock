@@ -443,14 +443,6 @@ packages:
       url: "https://pub.dev"
     source: hosted
     version: "2.1.1"
-  flutter_telegram_miniapp:
-    dependency: "direct main"
-    description:
-      name: flutter_telegram_miniapp
-      sha256: b9505cbdcaf9fabfaea4e3f75c8588268b018850786fac728de2e761bc602061
-      url: "https://pub.dev"
-    source: hosted
-    version: "0.0.7"
   flutter_test:
     dependency: "direct dev"
     description: flutter

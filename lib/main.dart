@@ -6,22 +6,22 @@ import 'package:provider/provider.dart';
 import 'package:boyshub/providers/language_provider.dart';
 import 'package:boyshub/screens/intro_screen.dart';
 import 'package:boyshub/providers/theme_provider.dart';
-import 'dart:html' as html;
+
 import 'package:flutter/foundation.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
-import 'package:flutter_telegram_miniapp/flutter_telegram_miniapp.dart';
 import "package:boyshub/telegram_provider.dart";
 
 String? getInitialLangFromUrl() {
   if (!kIsWeb) return null;
   try {
-    final uri = Uri.parse(html.window.location.href);
+    final uri = Uri.base; // ✅ good for both Android and Web
     return uri.queryParameters['lang'];
   } catch (e) {
     print('Error parsing URL for language: $e');
     return null;
   }
 }
+
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
