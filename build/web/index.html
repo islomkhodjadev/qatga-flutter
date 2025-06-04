@@ -46,29 +46,30 @@
   <link rel="manifest" href="manifest.json">
   <style>
     html, body {
-  overflow: hidden !important;
-  position: fixed !important;
-  height: 100% !important;
-  width: 100% !important;
-  margin: 0 !important;
-  padding: 0 !important;
-  overscroll-behavior: none !important;
-  -webkit-overflow-scrolling: auto !important;
-}
+   overflow: hidden;
+   position: fixed;
+   width: 100%;
+   height: 100%;
+   margin: 0;
+   padding: 0;
+   overscroll-behavior: none;
+   -webkit-overflow-scrolling: none;
+   touch-action: none;
+ }
+
+ #flutter_container {
+   width: 100vw;
+   height: 100vh;
+   overflow: hidden;
+ }
 
 
-    #flutter_container {
-      width: 100vw;
-      height: 100vh;
-      overflow: hidden;
-    }
-
-    /* Ensure Flutter canvas takes full space */
-    canvas {
-      touch-action: none;
-      width: 100% !important;
-      height: 100% !important;
-    }
+     /* Ensure Flutter canvas takes full space */
+     canvas {
+       touch-action: none;
+       width: 100% !important;
+       height: 100% !important;
+     }
   </style>
 
 
@@ -77,5 +78,11 @@
 <script src="https://telegram.org/js/telegram-web-app.js?57" defer></script>
 
 <script src="flutter_bootstrap.js" defer></script>
+<script>
+  document.addEventListener('touchmove', function(event) {
+    event.preventDefault();
+  }, { passive: false });
+</script>
+
 </body>
 </html>
