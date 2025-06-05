@@ -109,7 +109,23 @@ class PlaceDetailScreen extends StatelessWidget {
         'uz': "so'm",
         'ru': "сум",
         'en': "sum",
+      },
+      'openingHours': {
+        'uz': "ISH VAQTI",
+        'ru': "ВРЕМЯ РАБОТЫ",
+        'en': "OPENING HOURS",
+      },
+      'alwaysOpen': {
+        'uz': "24/7 OCHIQ",
+        'ru': "ОТКРЫТО 24/7",
+        'en': "OPEN 24/7",
+      },
+      'fromTo': {
+        'uz': "{from} dan {to} gacha",
+        'ru': "с {from} до {to}",
+        'en': "From {from} to {to}",
       }
+
     };
 
     TextStyle sectionStyle = const TextStyle(
@@ -197,6 +213,18 @@ class PlaceDetailScreen extends StatelessWidget {
           Text(place.getName(lang), style: Theme.of(context).textTheme.headlineSmall),
           const SizedBox(height: 8),
           Text(place.getDescription(lang), style: Theme.of(context).textTheme.bodyMedium),
+          const SizedBox(height: 16),
+          const SizedBox(height: 8),
+          Text(labels['openingHours']![lang] ?? 'OPENING HOURS', style: sectionStyle),
+          const SizedBox(height: 4),
+          Text(
+            place.openingTime == place.closingTime
+                ? labels['alwaysOpen']![lang] ?? '24/7 OPEN'
+                : (labels['fromTo']![lang] ?? 'From {from} to {to}')
+                .replaceFirst('{from}', place.openingTime)
+                .replaceFirst('{to}', place.closingTime),
+            style: Theme.of(context).textTheme.bodyMedium,
+          ),
           const SizedBox(height: 16),
 
           // --- AMENITIES SECTION ---
