@@ -42,9 +42,21 @@ class _CategoryDetailScreenState extends State<CategoryDetailScreen> {
     super.initState();
     fetchPlaces();
   }
+  @override
+  void didUpdateWidget(covariant CategoryDetailScreen oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.category.slug != widget.category.slug) {
+      fetchPlaces();
+    }
+  }
 
   Future<void> fetchPlaces({double? lat, double? lng}) async {
-    setState(() => _isLoading = true);
+    setState(() {
+      _isLoading = true;
+      _places = [];
+      _error = null;
+    });
+
     try {
       String url = 'places/places/?category_slug=${widget.category.slug}';
 
