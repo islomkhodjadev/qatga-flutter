@@ -10,6 +10,48 @@ import 'package:boyshub/providers/theme_provider.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
 import "package:boyshub/telegram_provider.dart";
+import 'package:shared_preferences/shared_preferences.dart';
+import 'package:boyshub/screens/places/home_screen.dart';
+import 'package:boyshub/screens/intro_screen.dart';
+
+class InitialScreenDecider extends StatefulWidget {
+  const InitialScreenDecider({super.key});
+
+  @override
+  State<InitialScreenDecider> createState() => _InitialScreenDeciderState();
+}
+
+class _InitialScreenDeciderState extends State<InitialScreenDecider> {
+  bool? _introSeen;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadSeen();
+  }
+
+  Future<void> _loadSeen() async {
+    final prefs = await SharedPreferences.getInstance();
+    final seen = prefs.getBool('intro_seen') ?? false;
+    setState(() {
+      _introSeen = seen;
+    });
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    if (_introSeen == null) {
+      // loading
+      return const Scaffold(
+        body: Center(child: CircularProgressIndicator()),
+      );
+    }
+    if (_introSeen == true) {
+      return const HomeScreen();
+    }
+    return const IntroScreen();
+  }
+}
 
 String? getInitialLangFromUrl() {
   if (!kIsWeb) return null;
@@ -493,7 +535,8 @@ Premium: ${_telegramUserData!['is_premium'] == true ? 'Yes' : 'No'}
             ),
           ),
           themeMode: themeProvider.themeMode,
-          home: const IntroScreen(),
+          home: const InitialScreenDecider(),
+
         );
       },
     );

@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:boyshub/providers/language_provider.dart';
 import 'package:boyshub/screens/places/home_screen.dart';
-
+import 'package:shared_preferences/shared_preferences.dart';
 class IntroScreen extends StatefulWidget {
   const IntroScreen({super.key});
 
@@ -75,12 +75,17 @@ class _IntroScreenState extends State<IntroScreen> {
     }
   }
 
-  void _finishIntro() {
+  void _finishIntro() async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setBool('intro_seen', true);
+
+    if (!mounted) return;
     Navigator.pushReplacement(
       context,
       MaterialPageRoute(builder: (_) => const HomeScreen()),
     );
   }
+
 
   @override
   void dispose() {
