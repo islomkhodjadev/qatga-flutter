@@ -26,7 +26,6 @@ class _CategoryDetailScreenState extends State<CategoryDetailScreen> {
   String? _error;
   bool _isLocationLoading = false;
   Position? _currentPosition;
-  DateTime? _lastLocationUpdate;
 
   // FILTER STATE
   double? _filterMinPrice;
@@ -45,8 +44,6 @@ class _CategoryDetailScreenState extends State<CategoryDetailScreen> {
   }
 
   Future<void> fetchPlaces({double? lat, double? lng}) async {
-    if (_isLoading) return; // Prevent multiple simultaneous calls
-    
     setState(() => _isLoading = true);
     try {
       String url = 'places/places/?category_slug=${widget.category.slug}';
@@ -89,20 +86,7 @@ class _CategoryDetailScreenState extends State<CategoryDetailScreen> {
   }
 
   Future<void> _getCurrentLocation() async {
-    // Prevent multiple rapid calls
     if (_isLocationLoading) return;
-    
-    // If we have a recent location (less than 30 seconds old), use it
-    if (_currentPosition != null && _lastLocationUpdate != null) {
-      final timeSinceLastUpdate = DateTime.now().difference(_lastLocationUpdate!);
-      if (timeSinceLastUpdate.inSeconds < 30) {
-        await fetchPlaces(
-          lat: _currentPosition!.latitude,
-          lng: _currentPosition!.longitude
-        );
-        return;
-      }
-    }
 
     setState(() => _isLocationLoading = true);
 
@@ -162,16 +146,10 @@ class _CategoryDetailScreenState extends State<CategoryDetailScreen> {
         return;
       }
 
-      final position = await Geolocator.getCurrentPosition(
-        desiredAccuracy: LocationAccuracy.medium, // Use medium accuracy for faster response
-        timeLimit: const Duration(seconds: 5), // Add timeout
-      );
-      
+      final position = await Geolocator.getCurrentPosition(desiredAccuracy: LocationAccuracy.best);
       setState(() {
         _currentPosition = position;
-        _lastLocationUpdate = DateTime.now();
       });
-      
       await fetchPlaces(lat: position.latitude, lng: position.longitude);
     } catch (e) {
       if (!mounted) return;
