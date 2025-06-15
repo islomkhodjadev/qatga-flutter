@@ -26,7 +26,7 @@ class _CategoryDetailScreenState extends State<CategoryDetailScreen> {
   String? _error;
   bool _isLocationLoading = false;
   Position? _currentPosition;
-  bool _isSortingByDistance = false;
+  DateTime? _lastLocationUpdate;
 
   // FILTER STATE
   double? _filterMinPrice;
@@ -45,6 +45,8 @@ class _CategoryDetailScreenState extends State<CategoryDetailScreen> {
   }
 
   Future<void> fetchPlaces({double? lat, double? lng}) async {
+    if (_isLoading) return; // Prevent multiple simultaneous calls
+    
     setState(() => _isLoading = true);
     try {
       String url = 'places/places/?category_slug=${widget.category.slug}';
@@ -54,8 +56,8 @@ class _CategoryDetailScreenState extends State<CategoryDetailScreen> {
         url += '&search=${Uri.encodeQueryComponent(_searchQuery.trim())}';
       }
 
-      // Add location parameters if provided and sorting by distance is enabled
-      if (_isSortingByDistance && lat != null && lng != null) {
+      // Add location parameters if provided
+      if (lat != null && lng != null) {
         url += '&latitude=$lat&longitude=$lng&sort_by=distance';
       }
 
@@ -87,7 +89,20 @@ class _CategoryDetailScreenState extends State<CategoryDetailScreen> {
   }
 
   Future<void> _getCurrentLocation() async {
+    // Prevent multiple rapid calls
     if (_isLocationLoading) return;
+    
+    // If we have a recent location (less than 30 seconds old), use it
+    if (_currentPosition != null && _lastLocationUpdate != null) {
+      final timeSinceLastUpdate = DateTime.now().difference(_lastLocationUpdate!);
+      if (timeSinceLastUpdate.inSeconds < 30) {
+        await fetchPlaces(
+          lat: _currentPosition!.latitude,
+          lng: _currentPosition!.longitude
+        );
+        return;
+      }
+    }
 
     setState(() => _isLocationLoading = true);
 
@@ -147,11 +162,16 @@ class _CategoryDetailScreenState extends State<CategoryDetailScreen> {
         return;
       }
 
-      final position = await Geolocator.getCurrentPosition(desiredAccuracy: LocationAccuracy.best);
+      final position = await Geolocator.getCurrentPosition(
+        desiredAccuracy: LocationAccuracy.medium, // Use medium accuracy for faster response
+        timeLimit: const Duration(seconds: 5), // Add timeout
+      );
+      
       setState(() {
         _currentPosition = position;
-        _isSortingByDistance = true;
+        _lastLocationUpdate = DateTime.now();
       });
+      
       await fetchPlaces(lat: position.latitude, lng: position.longitude);
     } catch (e) {
       if (!mounted) return;
@@ -161,17 +181,6 @@ class _CategoryDetailScreenState extends State<CategoryDetailScreen> {
     } finally {
       if (mounted) setState(() => _isLocationLoading = false);
     }
-  }
-
-  void _toggleDistanceSorting() {
-    setState(() {
-      _isSortingByDistance = !_isSortingByDistance;
-      if (_isSortingByDistance && _currentPosition != null) {
-        fetchPlaces(lat: _currentPosition!.latitude, lng: _currentPosition!.longitude);
-      } else {
-        fetchPlaces();
-      }
-    });
   }
 
   String _getLocalizedText(String lang, String key) {
@@ -534,29 +543,12 @@ class _CategoryDetailScreenState extends State<CategoryDetailScreen> {
           ),
         ],
       ),
-      floatingActionButton: Row(
-        mainAxisAlignment: MainAxisAlignment.end,
-        children: [
-          if (_currentPosition != null)
-            FloatingActionButton(
-              heroTag: 'toggleDistance',
-              onPressed: _toggleDistanceSorting,
-              tooltip: _isSortingByDistance ? 'Disable distance sorting' : 'Enable distance sorting',
-              child: Icon(
-                _isSortingByDistance ? Icons.sort_by_alpha : Icons.near_me,
-                color: _isSortingByDistance ? Colors.blue : null,
-              ),
-            ),
-          const SizedBox(width: 16),
-          FloatingActionButton(
-            heroTag: 'getLocation',
-            onPressed: _isLocationLoading ? null : _getCurrentLocation,
-            tooltip: 'Show nearby places',
-            child: _isLocationLoading
-                ? const CircularProgressIndicator(color: Colors.white)
-                : const Icon(Icons.my_location),
-          ),
-        ],
+      floatingActionButton: FloatingActionButton(
+        onPressed: _isLocationLoading ? null : _getCurrentLocation,
+        tooltip: 'Show nearest places',
+        child: _isLocationLoading
+            ? const CircularProgressIndicator(color: Colors.white)
+            : const Icon(Icons.near_me),
       ),
     );
   }
