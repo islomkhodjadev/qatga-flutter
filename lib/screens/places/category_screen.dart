@@ -26,6 +26,7 @@ class _CategoryDetailScreenState extends State<CategoryDetailScreen> {
   String? _error;
   bool _isLocationLoading = false;
   Position? _currentPosition;
+  bool _isSortingByDistance = false;
 
   // FILTER STATE
   double? _filterMinPrice;
@@ -53,9 +54,9 @@ class _CategoryDetailScreenState extends State<CategoryDetailScreen> {
         url += '&search=${Uri.encodeQueryComponent(_searchQuery.trim())}';
       }
 
-      // Add location parameters if provided
-      if (lat != null && lng != null) {
-        url += '&latitude=$lat&longitude=$lng';
+      // Add location parameters if provided and sorting by distance is enabled
+      if (_isSortingByDistance && lat != null && lng != null) {
+        url += '&latitude=$lat&longitude=$lng&sort_by=distance';
       }
 
       // --- Add filters ---
@@ -147,6 +148,10 @@ class _CategoryDetailScreenState extends State<CategoryDetailScreen> {
       }
 
       final position = await Geolocator.getCurrentPosition(desiredAccuracy: LocationAccuracy.best);
+      setState(() {
+        _currentPosition = position;
+        _isSortingByDistance = true;
+      });
       await fetchPlaces(lat: position.latitude, lng: position.longitude);
     } catch (e) {
       if (!mounted) return;
@@ -156,6 +161,17 @@ class _CategoryDetailScreenState extends State<CategoryDetailScreen> {
     } finally {
       if (mounted) setState(() => _isLocationLoading = false);
     }
+  }
+
+  void _toggleDistanceSorting() {
+    setState(() {
+      _isSortingByDistance = !_isSortingByDistance;
+      if (_isSortingByDistance && _currentPosition != null) {
+        fetchPlaces(lat: _currentPosition!.latitude, lng: _currentPosition!.longitude);
+      } else {
+        fetchPlaces();
+      }
+    });
   }
 
   String _getLocalizedText(String lang, String key) {
@@ -518,12 +534,29 @@ class _CategoryDetailScreenState extends State<CategoryDetailScreen> {
           ),
         ],
       ),
-      floatingActionButton: FloatingActionButton(
-        onPressed: _isLocationLoading ? null : _getCurrentLocation,
-        tooltip: 'Show nearby places',
-        child: _isLocationLoading
-            ? const CircularProgressIndicator(color: Colors.white)
-            : const Icon(Icons.near_me),
+      floatingActionButton: Row(
+        mainAxisAlignment: MainAxisAlignment.end,
+        children: [
+          if (_currentPosition != null)
+            FloatingActionButton(
+              heroTag: 'toggleDistance',
+              onPressed: _toggleDistanceSorting,
+              tooltip: _isSortingByDistance ? 'Disable distance sorting' : 'Enable distance sorting',
+              child: Icon(
+                _isSortingByDistance ? Icons.sort_by_alpha : Icons.near_me,
+                color: _isSortingByDistance ? Colors.blue : null,
+              ),
+            ),
+          const SizedBox(width: 16),
+          FloatingActionButton(
+            heroTag: 'getLocation',
+            onPressed: _isLocationLoading ? null : _getCurrentLocation,
+            tooltip: 'Show nearby places',
+            child: _isLocationLoading
+                ? const CircularProgressIndicator(color: Colors.white)
+                : const Icon(Icons.my_location),
+          ),
+        ],
       ),
     );
   }
