@@ -67,6 +67,19 @@ class Place {
     this.category,
   });
 
+  static String _formatTime(String timeStr) {
+    if (timeStr.isEmpty) return '';
+    try {
+      final parts = timeStr.split(':');
+      if (parts.length >= 2) {
+        return '${parts[0]}:${parts[1]}';
+      }
+      return timeStr;
+    } catch (e) {
+      return timeStr;
+    }
+  }
+
   factory Place.fromJson(Map<String, dynamic> json) {
     return Place(
       id: json['id'] ?? 0,
@@ -85,8 +98,8 @@ class Place {
       addressEn: json['address_en'] ?? '',
       latitude: double.tryParse(json['latitude']?.toString() ?? '0') ?? 0.0,
       longitude: double.tryParse(json['longitude']?.toString() ?? '0') ?? 0.0,
-      openingTime: json['opening_time'] ?? '',
-      closingTime: json['closing_time'] ?? '',
+      openingTime: _formatTime(json['opening_time'] ?? ''),
+      closingTime: _formatTime(json['closing_time'] ?? ''),
       holidays: json['holidays'] ?? '',
       phoneNumber: json['phone_number'] ?? '',
       telegram: (json['telegram'] == null || json['telegram'] == '') ? null : json['telegram'],
@@ -180,7 +193,4 @@ class Place {
         return address;
     }
   }
-
-
-
 }
