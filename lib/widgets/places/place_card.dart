@@ -20,7 +20,12 @@ class PlaceCard extends StatelessWidget {
     String? imageUrl;
     if (place.images.isNotEmpty) {
       try {
-        imageUrl = place.images.first.url;
+        // First try to find the primary image
+        final primaryImage = place.images.firstWhere(
+          (image) => image.is_primary,
+          orElse: () => place.images.first,
+        );
+        imageUrl = primaryImage.url;
         if (imageUrl.startsWith('/')) {
           // Uncomment and adjust for local dev if needed:
           // imageUrl = 'http://10.0.2.2:8000$imageUrl';
