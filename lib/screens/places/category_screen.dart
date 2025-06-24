@@ -4,13 +4,12 @@ import 'package:boyshub/models/places/place_model.dart';
 import 'package:boyshub/screens/places/place_detail_screen.dart';
 import 'package:boyshub/services/api_service.dart';
 import 'dart:convert';
+import 'dart:js' as js;
 import 'package:boyshub/widgets/app_bar.dart';
 import 'package:provider/provider.dart';
 import 'package:boyshub/providers/language_provider.dart';
-import 'package:geolocator/geolocator.dart';
-import 'package:permission_handler/permission_handler.dart';
 import 'package:boyshub/widgets/places/place_card.dart';
-
+import 'dart:async';
 class CategoryDetailScreen extends StatefulWidget {
   final Category category;
 
@@ -25,7 +24,8 @@ class _CategoryDetailScreenState extends State<CategoryDetailScreen> {
   bool _isLoading = true;
   String? _error;
   bool _isLocationLoading = false;
-  Position? _currentPosition;
+  double? _currentLatitude;
+  double? _currentLongitude;
 
   // FILTER STATE
   double? _filterMinPrice;
@@ -41,7 +41,31 @@ class _CategoryDetailScreenState extends State<CategoryDetailScreen> {
   void initState() {
     super.initState();
     fetchPlaces();
+    _initializeTelegramWebApp();
   }
+
+  void _initializeTelegramWebApp() {
+    try {
+      // Check if Telegram WebApp is available
+      if (js.context.hasProperty('Telegram') &&
+          js.context['Telegram'].hasProperty('WebApp')) {
+        print('Telegram WebApp detected');
+
+        // Check if LocationManager is available
+        final webApp = js.context['Telegram']['WebApp'];
+        if (webApp.hasProperty('LocationManager')) {
+          print('LocationManager is available');
+        } else {
+          print('LocationManager is not available - using fallback');
+        }
+      } else {
+        print('Not running in Telegram WebApp environment');
+      }
+    } catch (e) {
+      print('Error initializing Telegram WebApp: $e');
+    }
+  }
+
   @override
   void didUpdateWidget(covariant CategoryDetailScreen oldWidget) {
     super.didUpdateWidget(oldWidget);
@@ -103,66 +127,33 @@ class _CategoryDetailScreenState extends State<CategoryDetailScreen> {
     setState(() => _isLocationLoading = true);
 
     try {
-      bool serviceEnabled = await Geolocator.isLocationServiceEnabled();
-      if (!serviceEnabled) {
-        final lang = Provider.of<LanguageProvider>(context, listen: false).lang;
-        final bool? shouldEnable = await showDialog<bool>(
-          context: context,
-          builder: (context) => AlertDialog(
-            title: Text(_getLocalizedText(lang, 'locationDisabledTitle')),
-            content: Text(_getLocalizedText(lang, 'locationDisabledMessage')),
-            actions: [
-              TextButton(
-                onPressed: () => Navigator.pop(context, false),
-                child: Text(_getLocalizedText(lang, 'cancel')),
-              ),
-              TextButton(
-                onPressed: () => Navigator.pop(context, true),
-                child: Text(_getLocalizedText(lang, 'enable')),
-              ),
-            ],
-          ),
-        );
-        if (shouldEnable ?? false) await Geolocator.openLocationSettings();
-        return;
-      }
+      final lang = Provider.of<LanguageProvider>(context, listen: false).lang;
 
-      LocationPermission permission = await Geolocator.checkPermission();
-      if (permission == LocationPermission.denied) {
-        permission = await Geolocator.requestPermission();
-        if (permission != LocationPermission.whileInUse && permission != LocationPermission.always) {
-          throw Exception('Location permission denied');
+      // Try Telegram Mini App LocationManager first
+      if (await _getTelegramLocation()) {
+        if (_currentLatitude != null && _currentLongitude != null) {
+          await fetchPlaces(lat: _currentLatitude, lng: _currentLongitude);
+          return;
         }
       }
 
-      if (permission == LocationPermission.deniedForever) {
-        final lang = Provider.of<LanguageProvider>(context, listen: false).lang;
-        final bool? openSettings = await showDialog<bool>(
-          context: context,
-          builder: (context) => AlertDialog(
-            title: Text(_getLocalizedText(lang, 'permissionRequiredTitle')),
-            content: Text(_getLocalizedText(lang, 'permissionRequiredMessage')),
-            actions: [
-              TextButton(
-                onPressed: () => Navigator.pop(context, false),
-                child: Text(_getLocalizedText(lang, 'cancel')),
-              ),
-              TextButton(
-                onPressed: () => Navigator.pop(context, true),
-                child: Text(_getLocalizedText(lang, 'settings')),
-              ),
-            ],
-          ),
-        );
-        if (openSettings ?? false) await openAppSettings();
-        return;
+      // Fallback to Web Geolocation API
+      if (await _getWebLocation()) {
+        if (_currentLatitude != null && _currentLongitude != null) {
+          await fetchPlaces(lat: _currentLatitude, lng: _currentLongitude);
+          return;
+        }
       }
 
-      final position = await Geolocator.getCurrentPosition(desiredAccuracy: LocationAccuracy.best);
-      setState(() {
-        _currentPosition = position;
-      });
-      await fetchPlaces(lat: position.latitude, lng: position.longitude);
+      // If all methods fail, show error
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(_getLocalizedText(lang, 'locationError')),
+          backgroundColor: Colors.red,
+        ),
+      );
+
     } catch (e) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
@@ -173,59 +164,200 @@ class _CategoryDetailScreenState extends State<CategoryDetailScreen> {
     }
   }
 
+  Future<bool> _getTelegramLocation() async {
+    try {
+      // Check if we're in Telegram WebApp environment
+      if (!js.context.hasProperty('Telegram') ||
+          !js.context['Telegram'].hasProperty('WebApp')) {
+        return false;
+      }
+
+      final webApp = js.context['Telegram']['WebApp'];
+
+      // Check if LocationManager is available
+      if (!webApp.hasProperty('LocationManager')) {
+        print('LocationManager not available in this Telegram version');
+        return false;
+      }
+
+      final locationManager = webApp['LocationManager'];
+
+      // Check if location access is available
+      if (!locationManager.callMethod('isLocationAvailable')) {
+        print('Location is not available');
+        return false;
+      }
+
+      // Request location
+      return await _requestTelegramLocation(locationManager);
+
+    } catch (e) {
+      print('Error getting Telegram location: $e');
+      return false;
+    }
+  }
+
+  Future<bool> _requestTelegramLocation(dynamic locationManager) async {
+    try {
+      // Create a completer to handle the async callback
+      final completer = Completer<bool>();
+
+      // Set up callback for location result
+      js.context['locationCallback'] = js.allowInterop((dynamic result) {
+        try {
+          if (result != null && result.hasProperty('latitude') && result.hasProperty('longitude')) {
+            setState(() {
+              _currentLatitude = result['latitude'].toDouble();
+              _currentLongitude = result['longitude'].toDouble();
+            });
+            completer.complete(true);
+          } else {
+            completer.complete(false);
+          }
+        } catch (e) {
+          print('Error in location callback: $e');
+          completer.complete(false);
+        }
+      });
+
+      // Set up error callback
+      js.context['locationErrorCallback'] = js.allowInterop((dynamic error) {
+        print('Telegram location error: $error');
+        completer.complete(false);
+      });
+
+      // Request location with callbacks
+      locationManager.callMethod('getLocation', [
+        js.context['locationCallback'],
+        js.context['locationErrorCallback']
+      ]);
+
+      // Wait for result with timeout
+      return await completer.future.timeout(
+        const Duration(seconds: 10),
+        onTimeout: () {
+          print('Telegram location request timed out');
+          return false;
+        },
+      );
+
+    } catch (e) {
+      print('Error requesting Telegram location: $e');
+      return false;
+    }
+  }
+
+  Future<bool> _getWebLocation() async {
+    try {
+      // Use JavaScript navigator.geolocation as fallback
+      if (!js.context['navigator'].hasProperty('geolocation')) {
+        return false;
+      }
+
+      final completer = Completer<bool>();
+
+      // Success callback
+      js.context['webLocationSuccess'] = js.allowInterop((dynamic position) {
+        try {
+          final coords = position['coords'];
+          setState(() {
+            _currentLatitude = coords['latitude'].toDouble();
+            _currentLongitude = coords['longitude'].toDouble();
+          });
+          completer.complete(true);
+        } catch (e) {
+          print('Error in web geolocation success: $e');
+          completer.complete(false);
+        }
+      });
+
+      // Error callback
+      js.context['webLocationError'] = js.allowInterop((dynamic error) {
+        print('Web geolocation error: ${error['message']}');
+        completer.complete(false);
+      });
+
+      // Request location
+      js.context['navigator']['geolocation'].callMethod('getCurrentPosition', [
+        js.context['webLocationSuccess'],
+        js.context['webLocationError'],
+        js.JsObject.jsify({
+          'enableHighAccuracy': true,
+          'timeout': 10000,
+          'maximumAge': 60000,
+        })
+      ]);
+
+      return await completer.future.timeout(
+        const Duration(seconds: 15),
+        onTimeout: () => false,
+      );
+
+    } catch (e) {
+      print('Error with web geolocation: $e');
+      return false;
+    }
+  }
+
   String _getLocalizedText(String lang, String key) {
     final messages = {
-      'uz': {
-        'locationDisabledTitle': 'Joylashuv xizmati',
-        'locationDisabledMessage': 'Joylashuv xizmati o\'chirilgan. Yoqilsinmi?',
-        'permissionRequiredTitle': 'Ruxsat kerak',
-        'permissionRequiredMessage': 'Ilova sozlamalaridan ruxsat bering',
-        'cancel': 'Bekor qilish',
-        'enable': 'Yoqish',
-        'settings': 'Sozlamalar',
-        'filters': 'Filterlar',
-        'apply': 'Qo‘llash',
-        'minPrice': 'Minimal narx',
-        'maxPrice': 'Maksimal narx',
-        'serviceType': 'Xizmat turi',
-        'serviceName': 'Xizmat nomi',
-        'clear': 'Tozalash',
-        'searchHint': 'Nomi, manzili yoki xizmat bo‘yicha qidirish...',
-      },
-      'ru': {
-        'locationDisabledTitle': 'Служба геолокации',
-        'locationDisabledMessage': 'Служба геолокации отключена. Включить?',
-        'permissionRequiredTitle': 'Требуется разрешение',
-        'permissionRequiredMessage': 'Разрешите в настройках приложения',
-        'cancel': 'Отмена',
-        'enable': 'Включить',
-        'settings': 'Настройки',
-        'filters': 'Фильтры',
-        'apply': 'Применить',
-        'minPrice': 'Мин. цена',
-        'maxPrice': 'Макс. цена',
-        'serviceType': 'Тип услуги',
-        'serviceName': 'Название услуги',
-        'clear': 'Очистить',
-        'searchHint': 'Поиск по названию, адресу или услуге...',
-      },
-      'en': {
-        'locationDisabledTitle': 'Location Service',
-        'locationDisabledMessage': 'Location service is disabled. Enable it?',
-        'permissionRequiredTitle': 'Permission Required',
-        'permissionRequiredMessage': 'Please allow permission from app settings',
-        'cancel': 'Cancel',
-        'enable': 'Enable',
-        'settings': 'Settings',
-        'filters': 'Filters',
-        'apply': 'Apply',
-        'minPrice': 'Min Price',
-        'maxPrice': 'Max Price',
-        'serviceType': 'Service Type',
-        'serviceName': 'Service Name',
-        'clear': 'Clear',
-        'searchHint': 'Search by name, address, or service...',
-      },
+    'uz': {
+    'locationDisabledTitle': 'Joylashuv xizmati',
+    'locationDisabledMessage': 'Joylashuv xizmati o\'chirilgan. Yoqilsinmi?',
+    'permissionRequiredTitle': 'Ruxsat kerak',
+    'permissionRequiredMessage': 'Ilova sozlamalaridan ruxsat bering',
+    'cancel': 'Bekor qilish',
+    'enable': 'Yoqish',
+    'settings': 'Sozlamalar',
+    'filters': 'Filterlar',
+    'apply': "Qo'llash",
+    'minPrice': 'Minimal narx',
+    'maxPrice': 'Maksimal narx',
+    'serviceType': 'Xizmat turi',
+    'serviceName': 'Xizmat nomi',
+    'clear': 'Tozalash',
+    'searchHint': "Nomi, manzili yoki xizmat bo'yicha qidirish...",
+    'locationError': 'Joylashuvni aniqlab bo\'lmadi. Telegram sozlamalarida ruxsat berilganligini tekshiring.',
+    'locationSuccess': 'Joylashuv muvaffaqiyatli aniqlandi',
+    },
+    'ru': {
+    'locationDisabledTitle': 'Служба геолокации',
+    'locationDisabledMessage': 'Служба геолокации отключена. Включить?',
+    'permissionRequiredTitle': 'Требуется разрешение',
+    'permissionRequiredMessage': 'Разрешите в настройках приложения',
+    'cancel': 'Отмена',
+    'enable': 'Включить',
+    'settings': 'Настройки',
+    'filters': 'Фильтры',
+    'apply': 'Применить',
+    'minPrice': 'Мин. цена',
+    'maxPrice': 'Макс. цена',
+    'serviceType': 'Тип услуги',
+    'serviceName': 'Название услуги',
+    'clear': 'Очистить',
+    'searchHint': 'Поиск по названию, адресу или услуге...',
+    'locationError': 'Не удалось определить местоположение. Проверьте разрешения в настройках Telegram.',
+    'locationSuccess': 'Местоположение успешно определено',
+    },
+    'en': {
+    'locationDisabledTitle': 'Location Service',
+    'locationDisabledMessage': 'Location service is disabled. Enable it?',
+    'permissionRequiredTitle': 'Permission Required',
+    'permissionRequiredMessage': 'Please allow permission from app settings',
+    'cancel': 'Cancel',
+    'enable': 'Enable',
+    'settings': 'Settings',
+    'filters': 'Filters',
+    'apply': 'Apply',
+    'minPrice': 'Min Price',
+    'maxPrice': 'Max Price',
+    'serviceType': 'Service Type',
+    'serviceName': 'Service Name',
+    'clear': 'Clear',
+    'searchHint': 'Search by name, address, or service...',
+    'locationError': 'Could not determine location. Check permissions in Telegram settings.',
+    'locationSuccess': 'Location successfully determined',
+    },
     };
     return messages[lang]?[key] ?? messages['en']![key] ?? key;
   }
@@ -406,18 +538,11 @@ class _CategoryDetailScreenState extends State<CategoryDetailScreen> {
       appBar: MyAppBar(
         title: category.getName(lang),
         actions: [
-          // IconButton(
-          //   icon: const Icon(Icons.filter_alt), // <-- Forces black icon
-          //   tooltip: _getLocalizedText(lang, 'filters'),
-          //   onPressed: _showFilterDialog,
-          // ),
           IconButton(
             icon: Image.asset(
-
               'assets/icons/filter.png',
               width: 24,
               height: 24,
-              // Optional: apply color filter
             ),
             tooltip: _getLocalizedText(lang, 'filters'),
             onPressed: _showFilterDialog,
